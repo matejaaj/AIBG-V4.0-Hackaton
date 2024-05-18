@@ -8,7 +8,7 @@ from collections import deque
 class GameState:
     def __init__(self, data):
         self.turn = str(data['turn'])
-        self.firstPlayerTurn = str(data['firstPlayerTurn'])
+        self.firstPlayerTurn = bool(data['firstPlayerTurn'])
         self.player1 = Player(data['player1'])
         self.player2 = Player(data['player2'])
         self.board = [[str(cell) for cell in row] for row in data['board']]
@@ -23,7 +23,7 @@ class Player:
         self.increased_backpack_duration = str(data['increased_backpack_duration'])
         self.daze_turns = str(data['daze_turns'])
         self.frozen_turns = str(data['frozen_turns'])
-        self.backpack_capacity = str(data['backpack_capacity'])
+        self.backpack_capacity = int(data['backpack_capacity'])
         self.raw_minerals = str(data['raw_minerals'])
         self.processed_minerals = str(data['processed_minerals'])
         self.raw_diamonds = str(data['raw_diamonds'])
@@ -66,50 +66,97 @@ class Player:
 
         return retVal
 
-    def find_nearest_accessible_target(self, board, target_label):
+    def find_nearest_target(self, board, target_label):
         min_distance = float('inf')
-        nearest_accessible_coords = None
+        nearest_target_coords = None
 
         for i in range(len(board)):
             for j in range(len(board[i])):
                 cell = board[i][j]
                 if isinstance(cell, str) and cell.startswith(target_label):
-                    neighbors = [
-                        (i - 1, j), (i + 1, j), (i, j - 1), (i, j + 1)
-                    ]
-                    for ni, nj in neighbors:
-                        if 0 <= ni < len(board) and 0 <= nj < len(board[0]):
-                            if board[ni][nj] == 'E':
-                                distance = ((self.position[0] - ni) ** 2 + (self.position[1] - nj) ** 2) ** 0.5
-                                if distance < min_distance:
-                                    min_distance = distance
-                                    nearest_accessible_coords = [ni, nj]  # Promenjeno da vrati listu
+                    distance = ((self.position[0] - i) ** 2 + (self.position[1] - j) ** 2) ** 0.5
+                    if distance < min_distance:
+                        min_distance = distance
+                        nearest_target_coords = [i, j]  # Vraća listu
 
-        return nearest_accessible_coords
+        return nearest_target_coords
+
+    def find_accessible_neighbor(self, board, target_coords):
+        if not target_coords:
+            return None  # Ako nema ciljanih koordinata, nema ni praznog polja
+
+        i, j = target_coords
+        neighbors = [
+            [i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]
+        ]
+        for ni, nj in neighbors:
+            if 0 <= ni < len(board) and 0 <= nj < len(board[0]):
+                if board[ni][nj] == 'E':
+                    return [ni, nj]  # Vraća listu
+
+        return None 
 
 
+        
+    def GetOreCapacity(self, board, coordinates):
+        ore = board[coordinates[0]][coordinates[1]]
+        parts = ore.split('_')
+        return int(parts[1])
+    
+    def GetOreValue(self, board, coordinates):
+        ore = board[coordinates[0]][coordinates[1]]
+        parts = ore.split('_')
+        return 2 if parts[0] == 'M' else 5
+    
+    def GetHomePosition(self, gameState):
+        return [9,0] if gameState.firstPlayerTurn else [0,9]
 
+    def GoHomeActions(self, gameState, player_coordinates, home_coordinates):
+        actions = self.get_move_sequence(gameState, player_coordinates, home_coordinates)
+        return actions
 
+    def GetPlayerCordinates(self, gameState):
+        return gameState.player1.position if gameState.firstPlayerTurn else gameState.player2.position
 
     def GetMiningSequence(self, gameState, objectToMine):
-        target_coordinates = self.find_nearest_accessible_target(gameState.board, objectToMine)
-        actions = self.get_move_sequence(gameState, target_coordinates)
-        # zakucan jedan mine
-        # treba mi najblizi mineral
-        #actions.add(self.MineAction())
-        # actions.append("rest")
-        # actions.append("move ")
+        player_coordinates = self.GetPlayerCordinates(gameState)
+        ## ---------------------------------- akcije za kretnju
+        target_coordinates = self.find_nearest_target(gameState.board, objectToMine)
+        move_coordinates = self.find_accessible_neighbor(gameState.board, target_coordinates)
+        actions = self.get_move_sequence(gameState, player_coordinates,  move_coordinates)
+
+
+        player_coordinates = move_coordinates
+        ## ----- mine akcije
+        player_capacity = int(gameState.player1.backpack_capacity)  
+        ore_capacity = self.GetOreCapacity(gameState.board, target_coordinates)
+        ore_value = self.GetOreValue(gameState.board, target_coordinates)
+
+        while player_capacity <= 8 and ore_capacity > 0:
+            if player_capacity + ore_value > 8:
+                break
+            
+            actions.append(f"mine {target_coordinates[0]} {target_coordinates[1]}")
+            player_capacity += ore_value
+            ore_capacity -= 1 
+
+
+        home_coordinates = self.GetHomePosition(gameState)
+        actions.extend(self.GoHomeActions(gameState, player_coordinates, home_coordinates))
+
+
         return actions
     
-    def get_move_sequence(self, gameState, target_coordinates):
+    def get_move_sequence(self, gameState,  from_coordinates, target_coordinates):
         search = BreadthFirstSearch(gameState)
         if gameState.firstPlayerTurn:
-            initial_state = RobotState(gameState, None, gameState.player1.position, target_coordinates)
+            initial_state = RobotState(gameState, None, from_coordinates, target_coordinates)
         else:
-            initial_state = RobotState(gameState, None, gameState.player2.position, target_coordinates)
+            initial_state = RobotState(gameState, None, from_coordinates, target_coordinates)
 
         path, _, _ = search.search(lambda: initial_state)
 
+        path.pop(0)
         return self.create_move_command(path)
 
     def create_move_command(self, actions):
@@ -313,8 +360,14 @@ while True:
 
     gameState = GameState(json_data)
 
+
+    #if dazed
+    # new sequnce
+
+
+
     if not move_sequence:
-        move_sequence = gameState.player1.GetMiningSequence(gameState, 'M')
+        move_sequence = gameState.player1.GetMiningSequence(gameState,  'M')
 
     
     temp = move_sequence.pop(0)
