@@ -24,10 +24,10 @@ class Player:
         self.daze_turns = str(data['daze_turns'])
         self.frozen_turns = str(data['frozen_turns'])
         self.backpack_capacity = int(data['backpack_capacity'])
-        self.raw_minerals = str(data['raw_minerals'])
-        self.processed_minerals = str(data['processed_minerals'])
-        self.raw_diamonds = str(data['raw_diamonds'])
-        self.processed_diamonds = str(data['processed_diamonds'])
+        self.raw_minerals = int(data['raw_minerals'])
+        self.processed_minerals = int(data['processed_minerals'])
+        self.raw_diamonds = int(data['raw_diamonds'])
+        self.processed_diamonds = int(data['processed_diamonds'])
     
 
     def get_legal_positions(self, board):
@@ -79,25 +79,98 @@ class Player:
                     distance = ((self.position[0] - i) ** 2 + (self.position[1] - j) ** 2) ** 0.5
                     if distance < min_distance:
                         min_distance = distance
-                        nearest_target_coords = [i, j]  # Vraća listu
+                        nearest_target_coords = [i, j] 
 
         return nearest_target_coords
 
-    def find_accessible_neighbor(self, board, target_coords):
-        if not target_coords:
-            return None  # Ako nema ciljanih koordinata, nema ni praznog polja
+    def find_best_ore(self, board, target_label, value_weight=0.5):
+        best_score = float('-inf')
+        best_ore_coords = None
 
-        i, j = target_coords
+        for i in range(len(board)):
+            for j in range(len(board[i])):
+                cell = board[i][j]
+                if isinstance(cell, str) and cell.startswith(target_label):
+                    parts = cell.split('_')
+                    if len(parts) >= 3 and int(parts[1]) >= 2:
+                        number1 = int(parts[1])
+                        number2 = int(parts[2])
+
+                        distance = ((self.position[0] - i) ** 2 + (self.position[1] - j) ** 2) ** 0.5
+                        score = number1 + value_weight / (distance + 0.1) 
+
+                        if score > best_score:
+                            best_score = score
+                            best_ore_coords = [i, j]
+
+        return best_ore_coords
+
+
+    def find_accessible_neighbor(self, board, target_coords, player_coordinates):
+        target_i, target_j = target_coords
+        player_i, player_j = player_coordinates
         neighbors = [
-            [i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]
+            (target_i - 1, target_j), (target_i + 1, target_j),
+            (target_i, target_j - 1), (target_i, target_j + 1)
         ]
+
+        closest_neighbor = None
+        min_distance = float('inf')  # Initialize min_distance with infinity
+
         for ni, nj in neighbors:
-            if 0 <= ni < len(board) and 0 <= nj < len(board[0]):
-                if board[ni][nj] == 'E':
-                    return [ni, nj]  # Vraća listu
+            if 0 <= ni < len(board) and 0 <= nj < len(board[0]):  # Check bounds
+                if board[ni][nj] == 'E':  # Check if the neighbor is accessible
+                    # Calculate Euclidean distance from the neighbor to the player's position
+                    distance = ((ni - player_i) ** 2 + (nj - player_j) ** 2) ** 0.5
+                    if distance < min_distance:
+                        min_distance = distance
+                        closest_neighbor = [ni, nj]
 
-        return None 
+        return closest_neighbor
 
+    def BuildAction(self,x,y):
+        return f'build {x} {y}'
+
+    def RestAction():
+        return 'rest'
+
+    def ShopAction(self,action):
+        return f'shop {action}'
+
+    def AttackAction(self,x,y):
+        return f'attack {x} {y}'
+
+    def ConversionsAction(self,dCoins,mCoins,dEnergy,mEnergy,dXp,mXp):
+        return f"conv {dCoins} diamond {mCoins} mineral to coins, {dEnergy} diamond {mEnergy} mineral to energy, {dXp} diamond {mXp} mineral to xp"
+
+    def PutAction(self,X,Y,N,M):
+        return f'refinement-take {X} {Y} mineral {N} diamond {M}'
+
+    def TakeAction(self,X,Y,N,M):
+        return f'refinement-take {X} {Y} mineral {N} diamond {M}'
+
+    def ConversionsSplit(self):
+        total_minerals = self.raw_minerals
+        total_diamonds = self.raw_diamonds 
+
+        if total_minerals > 1:
+            m_energy =  1
+            m_xp = total_minerals - 1  
+        else:
+            m_energy = 0 
+            m_xp = total_minerals 
+
+        if total_diamonds > 1:
+            d_coins = 1 
+            d_xp = total_diamonds - 1  
+        else:
+            d_coins = 0  
+            d_xp = total_diamonds  
+
+        m_coins = 0
+        d_energy = 0
+
+        return self.ConversionsAction(d_coins, m_coins, d_energy, m_energy, d_xp, m_xp)
 
         
     def GetOreCapacity(self, board, coordinates):
@@ -122,14 +195,12 @@ class Player:
 
     def GetMiningSequence(self, gameState, objectToMine):
         player_coordinates = self.GetPlayerCordinates(gameState)
-        ## ---------------------------------- akcije za kretnju
-        target_coordinates = self.find_nearest_target(gameState.board, objectToMine)
-        move_coordinates = self.find_accessible_neighbor(gameState.board, target_coordinates)
+        target_coordinates = self.find_best_ore(gameState.board, objectToMine)
+        move_coordinates = self.find_accessible_neighbor(gameState.board, target_coordinates, player_coordinates)
         actions = self.get_move_sequence(gameState, player_coordinates,  move_coordinates)
 
 
         player_coordinates = move_coordinates
-        ## ----- mine akcije
         player_capacity = int(gameState.player1.backpack_capacity)  
         ore_capacity = self.GetOreCapacity(gameState.board, target_coordinates)
         ore_value = self.GetOreValue(gameState.board, target_coordinates)
@@ -141,12 +212,12 @@ class Player:
             actions.append(f"mine {target_coordinates[0]} {target_coordinates[1]}")
             player_capacity += ore_value
             ore_capacity -= 1 
-
+            self.raw_minerals += 2
 
         home_coordinates = self.GetHomePosition(gameState)
         actions.extend(self.GoHomeActions(gameState, player_coordinates, home_coordinates))
 
-
+        actions.append(self.ConversionsSplit())
         return actions
     
     def get_move_sequence(self, gameState,  from_coordinates, target_coordinates):
@@ -366,11 +437,8 @@ while True:
 
     gameState = GameState(json_data)
 
-
     #if dazed
     # new sequnce
-
-
 
     if not move_sequence:
         move_sequence = gameState.player1.GetMiningSequence(gameState,  'M')
