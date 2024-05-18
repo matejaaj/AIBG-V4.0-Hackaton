@@ -1,6 +1,7 @@
 import sys
 import time
 import json
+import random
 
 class GameState:
     def __init__(self, data):
@@ -30,14 +31,51 @@ class Player:
     def GetLegalPositions(self, board):
         retVal = []
         
+        x = int(self.position[0])
+        y = int(self.position[1])
+
+        if y < 9:
+            for i in range(y + 1, len(board[x])):
+                if board[x][i] != "E":
+                    break
+                else:
+                    retVal.append([x, i])
+
+        if y > 0:
+            for i in range(y - 1, -1, -1):
+                if board[x][i] != "E":
+                    break
+                else:
+                    retVal.append([x, i])
+
+        if x < 9:
+            for i in range(x + 1, len(board)):
+                if board[i][y] != "E":
+                    break
+                else:
+                    retVal.append([i, y])
+
+        if x > 0:
+            for i in range(x - 1, -1, -1):
+                if board[i][y] != "E":
+                    break
+                else:
+                    retVal.append([i, y])
+
         return retVal
 
 while True:
     line = sys.stdin.readline().strip()
-
-    gameState = GameState(line)
+    json_data = json.loads(line)
     
+    gameState = GameState(json_data)
 
-    print("rest", flush=True)
+    legal_positions = gameState.player1.GetLegalPositions(gameState.board)
+    if legal_positions:
+        move = random.choice(legal_positions)
+        move_str = "move {} {}".format(move[0], move[1])
+        print(move_str, flush=True)
+    else:
+        print("rest", flush=True)
 
     
