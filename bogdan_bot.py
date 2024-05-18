@@ -73,7 +73,7 @@ class Player:
         for i in range(len(board)):
             for j in range(len(board[i])):
                 cell = board[i][j]
-                if cell.startswith(target_label):
+                if isinstance(cell, str) and cell.startswith(target_label):
                     neighbors = [
                         (i - 1, j), (i + 1, j), (i, j - 1), (i, j + 1)
                     ]
@@ -87,8 +87,36 @@ class Player:
 
         return nearest_accessible_coords
 
-        def mine(self, x, y):
-            return "mine {} {}".format(x, y)
+
+
+
+    def GetMiningSequence(self, gameState, objectToMine):
+        target_coordinates = self.find_nearest_accessible_target(gameState.board, objectToMine)
+        actions = self.get_move_sequence(gameState, target_coordinates)
+        # zakucan jedan mine
+        # treba mi najblizi mineral
+        #actions.add(self.MineAction())
+        # actions.append("rest")
+        # actions.append("move ")
+        return actions
+    
+    def get_move_sequence(self, gameState, target_coordinates):
+        search = BreadthFirstSearch(gameState)
+        if gameState.firstPlayerTurn:
+            initial_state = RobotState(gameState, None, gameState.player1.position, target_coordinates)
+        else:
+            initial_state = RobotState(gameState, None, gameState.player2.position, target_coordinates)
+
+        path, _, _ = search.search(lambda: initial_state)
+
+        return self.create_move_command(path)
+
+    def create_move_command(self, actions):
+        commands = []
+        for action in actions:  
+            commands.append(f"move {action[0]} {action[1]}")
+
+        return commands
 
 class Search(object):
 
@@ -140,11 +168,9 @@ class Search(object):
     def select_state(self, states):
         pass
 
-
 class BreadthFirstSearch(Search):
     def select_state(self, states):
         return states.popleft()     
-
 class State(object):
 
     @abstractmethod
@@ -208,15 +234,6 @@ class State(object):
         """
         pass
     
-    @abstractmethod
-    def get_cost_estimate(self):
-        """
-        Apstraktna metoda koja treba da vrati procenu cene
-        (vrednost heuristicke funkcije - h(n)) za ovo stanje.
-        Koristi se za vodjene pretrage.
-        :return: float
-        """
-        pass
     
     @abstractmethod
     def get_current_cost(self):
@@ -226,8 +243,6 @@ class State(object):
         :return: float
         """
         pass
-
-
 class RobotState(State):
 
     def __init__(self, gameState, parent=None, position=None, goal_position=None):
@@ -281,35 +296,15 @@ class RobotState(State):
 
     def manhattan_distance(self, pointA, pointB):
         return abs(pointA[0] - pointB[0]) + abs(pointA[1] - pointB[1])
-    
-    def get_cost_estimate(self):
-        distance = self.manhattan_distance(pointA, pointB)
-        if pointA[0] != pointB[0] and pointA[1] != pointB[1]: 
-            distance += 2
 
-        return distance
     
     def get_current_cost(self):
         return self.cost
 
-def get_move_sequence(gameState, target_label):
-        
-    #ore_coord = gameState.player1.find_nearest_accessible_target(board, target_label)
-    search = BreadthFirstSearch(gameState)
-    if gameState.firstPlayerTurn:
-        initial_state = RobotState(gameState, None, gameState.player1.position, [1, 2])
-    else:
-        initial_state = RobotState(gameState, None, gameState.player2.position, [1, 2])
 
-    path, _, _ = search.search(lambda: initial_state)
 
-    return path
 
 move_sequence = []
-
-def create_move_command(actinos):
-    for action in actinos:  
-        move_sequence.append(f"move {action[0]} {action[1]}")
 
 while True:
     line = sys.stdin.readline().strip()
@@ -318,9 +313,7 @@ while True:
     gameState = GameState(json_data)
 
     if not move_sequence:
-        path = get_move_sequence(gameState, "M")
-        create_move_command(path)
-        #move_sequence = ["rest", "move 9 1 ", "move 9 3"]
+        move_sequence = gameState.player1.GetMiningSequence(gameState, 'M')
 
     
     temp = move_sequence.pop(0)
