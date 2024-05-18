@@ -83,9 +83,10 @@ class Player:
                                 distance = ((self.position[0] - ni) ** 2 + (self.position[1] - nj) ** 2) ** 0.5
                                 if distance < min_distance:
                                     min_distance = distance
-                                    nearest_accessible_coords = (ni, nj)
+                                    nearest_accessible_coords = [ni, nj]  # Promenjeno da vrati listu
 
         return nearest_accessible_coords
+
 
 
 
