@@ -36,30 +36,32 @@ class Player:
         x = int(self.position[0])
         y = int(self.position[1])
 
+        available_fileds = ["A", "B", "E"]
+
         if y < 9:
             for i in range(y + 1, len(board[x])):
-                if board[x][i] != "E":
+                if board[x][i] not in available_fileds:
                     break
                 else:
                     retVal.append([x, i])
 
         if y > 0:
             for i in range(y - 1, -1, -1):
-                if board[x][i] != "E":
+                if board[x][i] not in available_fileds:
                     break
                 else:
                     retVal.append([x, i])
 
         if x < 9:
             for i in range(x + 1, len(board)):
-                if board[i][y] != "E":
+                if board[i][y] not in available_fileds:
                     break
                 else:
                     retVal.append([i, y])
 
         if x > 0:
             for i in range(x - 1, -1, -1):
-                if board[i][y] != "E":
+                if board[i][y] not in available_fileds:
                     break
                 else:
                     retVal.append([i, y])
@@ -156,6 +158,9 @@ class Player:
 
         path, _, _ = search.search(lambda: initial_state)
 
+        if path is None:
+            return []
+
         path.pop(0)
         return self.create_move_command(path)
 
@@ -230,11 +235,11 @@ class State(object):
 
         if self.parent is None:
             if gameState.firstPlayerTurn:
-                  self.position = gameState.player1.position
+                  self.position = position
                   self.player_code = "1"
-                  self.player = gameState.player1
+                  self.player = gameState.player2
             else:
-                self.position = gameState.player2.position
+                self.position = position
                 self.player_code = "2"
                 self.player = gameState.player2
             self.goal_position = goal_position  
@@ -306,30 +311,31 @@ class RobotState(State):
         x = int(self.position[0])
         y = int(self.position[1])
 
+        available_fileds = ["A", "B", "E"]
         if y < 9:
-            for i in range(y + 1, len(self.board[x])):
-                if self.board[x][i] != "E":
+            for i in range(y + 1, 10):
+                if self.board[x][i] not in available_fileds:
                     break
                 else:
                     retVal.append([x, i])
 
         if y > 0:
             for i in range(y - 1, -1, -1):
-                if self.board[x][i] != "E":
+                if self.board[x][i] not in available_fileds:
                     break
                 else:
                     retVal.append([x, i])
 
         if x < 9:
-            for i in range(x + 1, len(self.board)):
-                if self.board[i][y] != "E":
+            for i in range(x + 1, 10):
+                if self.board[i][y] not in available_fileds:
                     break
                 else:
                     retVal.append([i, y])
 
         if x > 0:
             for i in range(x - 1, -1, -1):
-                if self.board[i][y] != "E":
+                if self.board[i][y] not in available_fileds:
                     break
                 else:
                     retVal.append([i, y])
