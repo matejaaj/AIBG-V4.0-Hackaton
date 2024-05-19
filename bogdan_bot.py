@@ -17,12 +17,12 @@ class Player:
     def __init__(self, data):
         self.name = str(data['name'])
         self.energy = int(data['energy'])
-        self.xp = str(data['xp'])
-        self.coins = str(data['coins'])
+        self.xp = int(data['xp'])
+        self.coins = int(data['coins'])
         self.position = [int(pos) for pos in data['position']]
         self.increased_backpack_duration = str(data['increased_backpack_duration'])
-        self.daze_turns = str(data['daze_turns'])
-        self.frozen_turns = str(data['frozen_turns'])
+        self.daze_turns = int(data['daze_turns'])
+        self.frozen_turns = int(data['frozen_turns'])
         self.backpack_capacity = int(data['backpack_capacity'])
         self.raw_minerals = int(data['raw_minerals'])
         self.processed_minerals = int(data['processed_minerals'])
@@ -427,6 +427,13 @@ class RobotState(State):
 
 
 
+def ValidateDaze(gameState):
+    player = gameState.player1  if gameState.firstPlayerTurn == True else gameState.player2
+    if(player.coins >= 10 ): 
+        return True
+    else:
+        return False
+
 move_sequence = []
 
 while True:
@@ -435,12 +442,20 @@ while True:
 
     gameState = GameState(json_data)
 
+
     #if dazed
-    # new sequnce
-
+    #new sequnce
     if not move_sequence:
-        move_sequence = gameState.player1.GetMiningSequence(gameState,  'M')
+        move_sequence = gameState.player1.GetMiningSequence(gameState, 'M')
 
-    
+
+    if gameState.player2.name == "Topic Team":
+        position = gameState.player2.position
+
+        if gameState.player2.position == [0,9] and gameState.player1.xp >= 100:
+            if gameState.player2.daze_turns <= 1:
+                if(ValidateDaze(gameState)):
+                    move_sequence.insert(0, "shop daze")
+
     temp = move_sequence.pop(0)
     print(temp, flush=True)
