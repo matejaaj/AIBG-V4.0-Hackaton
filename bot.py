@@ -7,7 +7,7 @@ from collections import deque
 
 class GameState:
     def __init__(self, data):
-        self.turn = str(data['turn'])
+        self.turn = int(data['turn'])
         self.firstPlayerTurn = bool(data['firstPlayerTurn'])
         self.player1 = Player(data['player1'])
         self.player2 = Player(data['player2'])
@@ -29,44 +29,6 @@ class Player:
         self.raw_diamonds = int(data['raw_diamonds'])
         self.processed_diamonds = int(data['processed_diamonds'])
     
-
-    def get_legal_positions(self, board):
-        retVal = []
-        
-        x = int(self.position[0])
-        y = int(self.position[1])
-
-        available_fileds = ["A", "B", "E"]
-
-        if y < 9:
-            for i in range(y + 1, len(board[x])):
-                if board[x][i] not in available_fileds:
-                    break
-                else:
-                    retVal.append([x, i])
-
-        if y > 0:
-            for i in range(y - 1, -1, -1):
-                if board[x][i] not in available_fileds:
-                    break
-                else:
-                    retVal.append([x, i])
-
-        if x < 9:
-            for i in range(x + 1, len(board)):
-                if board[i][y] not in available_fileds:
-                    break
-                else:
-                    retVal.append([i, y])
-
-        if x > 0:
-            for i in range(x - 1, -1, -1):
-                if board[i][y] not in available_fileds:
-                    break
-                else:
-                    retVal.append([i, y])
-
-        return retVal
 
     def find_nearest_target(self, board, target_label):
         min_distance = float('inf')
@@ -149,7 +111,7 @@ class Player:
     def TakeAction(self,X,Y,N,M):
         return f'refinement-take {X} {Y} mineral {N} diamond {M}'
 
-    def ConversionsSplit(self):
+    def ConversionXPSplit(self):
         total_minerals = self.raw_minerals
         total_diamonds = self.raw_diamonds 
 
@@ -161,9 +123,9 @@ class Player:
                 m_energy = 0 
                 m_xp = total_minerals 
 
-            if total_diamonds > 5:
+            if total_diamonds >= 5:
                 d_xp = max(total_diamonds, 5) 
-                d_coins = total_diamonds - d_xp 
+                d_coins = 0
             else:
                 d_coins = 0  
                 d_xp = total_diamonds  
@@ -177,7 +139,7 @@ class Player:
             else:
                 m_energy = 0 
                 m_xp = total_minerals 
-            if total_diamonds > 5:
+            if total_diamonds >= 5:
                 d_xp = max(total_diamonds, 5) 
                 d_coins = total_diamonds - d_xp 
             else:
@@ -188,6 +150,57 @@ class Player:
             d_energy = 0
 
         return self.ConversionsAction(d_coins, m_coins, d_energy, m_energy, d_xp, m_xp)
+
+
+    def GetDestroyFactorySequence(self, gameState):
+        player_coordinates = self.GetPlayerCordinates(gameState)
+        target_coordinates = self.find_nearest_target(gameState.board, 'F')
+        if target_coordinates is None: return
+        move_coordinates = self.find_accessible_neighbor(gameState.board, target_coordinates, player_coordinates)
+        actions = self.get_move_sequence(gameState, player_coordinates, move_coordinates)
+
+        factory = gameState.board[target_coordinates[0]][target_coordinates[1]]
+        factory_parts = factory.split('_')
+        counter = int(factory_parts[2])
+        while(counter > 0 ):
+            actions.append(f"attack {target_coordinates[0]} {target_coordinates[1]}")
+            counter -= 1
+        return actions
+
+
+    def ConversionMoneySplit(self):
+        total_minerals = self.raw_minerals
+        total_diamonds = self.raw_diamonds 
+
+        # Initialize variables with default values
+        d_coins = 0
+        d_xp = 0
+        m_energy = 0
+        m_xp = 0
+        m_coins = 0
+        d_energy = 0
+
+        if self.energy <= 500:
+            if total_minerals >= 2:
+                m_energy = max(2, total_minerals - 2)
+                m_xp = total_minerals - m_energy 
+            else:
+                m_xp = total_minerals 
+
+            if total_diamonds >= 5:
+                d_xp = total_diamonds
+        else:
+            if total_minerals >= 2:
+                m_xp = max(2, total_minerals - 2)
+                m_energy = total_minerals - m_xp
+            else:
+                m_xp = total_minerals 
+
+            d_xp = total_diamonds
+            d_coins = 0
+
+        return self.ConversionsAction(d_coins, m_coins, d_energy, m_energy, d_xp, m_xp)
+
 
         
     def GetOreCapacity(self, board, coordinates):
@@ -208,7 +221,7 @@ class Player:
         return actions
 
     def GetPlayerCordinates(self, gameState):
-        return gameState.player1.position if gameState.firstPlayerTurn else gameState.player2.position
+        return myPlayer(gameState).position
 
     def GetMiningSequence(self, gameState, objectToMine):
         player_coordinates = self.GetPlayerCordinates(gameState)
@@ -217,7 +230,7 @@ class Player:
         actions = self.get_move_sequence(gameState, player_coordinates,  move_coordinates)
 
         player_coordinates = move_coordinates
-        player_capacity = int(gameState.player1.backpack_capacity)  
+        player_capacity = int(myPlayer(gameState).backpack_capacity)  
         ore_capacity = self.GetOreCapacity(gameState.board, target_coordinates)
         ore_value = self.GetOreValue(gameState.board, target_coordinates)
 
@@ -234,7 +247,35 @@ class Player:
         home_coordinates = self.GetHomePosition(gameState)
 
         actions.extend(self.GoHomeActions(gameState, player_coordinates, home_coordinates))
-        actions.append(self.ConversionsSplit())
+        actions.append(self.ConversionXPSplit())
+        self.raw_minerals = 0
+        return actions
+
+    def GetMiningMoneySequence(self, gameState, objectToMine):
+        player_coordinates = self.GetPlayerCordinates(gameState)
+        target_coordinates = self.find_best_ore(gameState.board, objectToMine)
+        move_coordinates = self.find_accessible_neighbor(gameState.board, target_coordinates, player_coordinates)
+        actions = self.get_move_sequence(gameState, player_coordinates,  move_coordinates)
+
+        player_coordinates = move_coordinates
+        player_capacity = int(myPlayer(gameState).backpack_capacity)  
+        ore_capacity = self.GetOreCapacity(gameState.board, target_coordinates)
+        ore_value = self.GetOreValue(gameState.board, target_coordinates)
+
+        while player_capacity <= 8 and ore_capacity > 0:
+            if player_capacity + ore_value > 8:
+                break
+            
+            actions.append(f"mine {target_coordinates[0]} {target_coordinates[1]}")
+            player_capacity += ore_value
+            ore_capacity -= 1 
+            
+            self.raw_minerals += 1
+
+        home_coordinates = self.GetHomePosition(gameState)
+
+        actions.extend(self.GoHomeActions(gameState, player_coordinates, home_coordinates))
+        actions.append(self.ConversionMoneySplit())
         self.raw_minerals = 0
         return actions
     
@@ -396,8 +437,13 @@ class RobotState(State):
         
         x = int(self.position[0])
         y = int(self.position[1])
+        
+        if self.get_agent_code == "1":
+            base = "A"
+        else:
+            base = "B"
 
-        available_fileds = ["A", "B", "E", self.player_code]
+        available_fileds = [base, "E", self.get_agent_code]
         if y < 9:
             for i in range(y + 1, 10):
                 if self.board[x][i] not in available_fileds:
@@ -441,19 +487,64 @@ class RobotState(State):
     def get_current_cost(self):
         return self.cost
 
+def count_letters_in_matrix(matrix):
+    count_D = 0
+    count_M = 0
+    
+    # Iterate through each row in the matrix
+    for row in matrix:
+        # Iterate through each element in the row
+        for element in row:
+            # Count the occurrences of 'D' and 'M' in the element
+            count_D += element.count('D')
+            count_M += element.count('M')
+
+    return [count_D, count_M]
 
 
 
 def ValidateDaze(gameState):
-    player = gameState.player1  if gameState.firstPlayerTurn == True else gameState.player2
+    player = myPlayer(gameState)
     if(player.coins >= 10 ): 
         return True
     else:
         return False
 
+def is_enemy_nearby(x, y, enemy_position, board_size=10):
+    neighbor_offsets = [
+        (-1, -1), (-1, 0), (-1, 1),
+        (0, -1),         (0, 1),
+        (1, -1), (1, 0), (1, 1)
+    ]
+
+    for dx, dy in neighbor_offsets:
+        neighbor_x = x + dx
+        neighbor_y = y + dy
+        if 0 <= neighbor_x < board_size and 0 <= neighbor_y < board_size:
+            if (neighbor_x, neighbor_y) == enemy_position:
+                return True
+
+    return False
+
 move_sequence = []
 
-cnt = 0
+cnt_money = 0
+cnt_xp = 0
+daze_cnt = 0
+test_bot_cnt = 0
+
+def myPlayer(gameState):
+    if gameState.firstPlayerTurn:
+        return gameState.player1
+    else:
+        return gameState.player2
+
+def enemyPlayer(gameState):
+    if gameState.firstPlayerTurn:
+        return gameState.player2
+    else:
+        return gameState.player1
+
 
 while True:
     line = sys.stdin.readline().strip()
@@ -461,23 +552,99 @@ while True:
 
     gameState = GameState(json_data)
 
-    if gameState.player2.name == "Topic Team":
-        position = gameState.player2.position
+    player = myPlayer(gameState)
+    enemy = enemyPlayer(gameState)
 
-        if gameState.player2.position == [0,9] and gameState.player1.xp >= 100:
-            if gameState.player2.daze_turns <= 1:
-                if(ValidateDaze(gameState)):
-                    move_sequence.insert(0, "shop daze")
+    if enemy.name == "Topic Team":
+        position = enemy.position
+        if(gameState.turn >= 200):
+            if (enemy.position == [0,9] or enemy.position ==[9,0]) and player.xp >= 200:
+                if enemy.daze_turns <= 1:
+                    if(ValidateDaze(gameState)):
+                        move_sequence.insert(0, "shop daze")
+        if not move_sequence :
+            move_sequence = player.GetDestroyFactorySequence(gameState)
 
-    if not move_sequence and cnt == 0:
-        move_sequence = gameState.player1.GetMiningSequence(gameState, 'M')
-        cnt += 1
-    if not move_sequence and cnt == 1:
-        move_sequence = gameState.player1.GetMiningSequence(gameState, 'D')
-        cnt += 1
-    if not move_sequence and cnt > 1:
-        move_sequence = gameState.player1.GetMiningSequence(gameState, 'M')
-        cnt += 1
+    ores = count_letters_in_matrix(gameState.board)
+    
+    if not move_sequence and (enemy.processed_diamonds != 0 or enemy.processed_minerals != 0):
+        move_sequence = player.GetDestroyFactorySequence(gameState)
+    elif ores[0] > ores[1] * 2:
+        if not move_sequence:
+            if cnt_money % 3 < 2:
+                move_sequence = player.GetMiningMoneySequence(gameState, 'D')
+                cnt_money += 1
+            else:
+                move_sequence = player.GetMiningMoneySequence(gameState, 'M')
+                cnt_money += 1
+
+    elif ores[1] > 8:
+        if not move_sequence:
+            if cnt_xp % 5 < 4:
+                move_sequence = player.GetMiningSequence(gameState, 'M')
+                cnt_money += 1
+    else: 
+        if not move_sequence:
+            move_sequence = player.GetMiningSequence(gameState, 'M')
+
+    if(enemy.name != "Topic Team"):
+        if (enemy.position == [0,9] or enemy.position ==[9,0]) and player.xp >= 20 and daze_cnt == 0:
+                if enemy.daze_turns <= 1:
+                    if(ValidateDaze(gameState)):
+                        move_sequence.insert(0, "shop daze")
+                    if(ValidateDaze(gameState)):
+                        move_sequence.insert(0, "shop daze")
+                        daze_cnt += 1000
 
     temp = move_sequence.pop(0)
+    if temp.startswith('move') and player.daze_turns != 0:
+        parts= temp.split(' ')
+        targetX= int(parts[1])
+        targetY= int(parts[2])
+        dX= targetX - int(player.position[0])
+        dY= targetY - int(player.position[1])
+        newX= int(player.position[0]) - dX
+        newY= int(player.position[1]) - dY
+        temp=f'move {newX} {newY}'
+
+
+    if temp.startswith('move'):
+        px, py = player.position
+        parts= temp.split(' ')
+        tx = int(parts[1])
+        ty = int(parts[2])
+        ex, ey = enemy.position
+
+        if ((tx - px) * (ey - py) - (ty - py) * (ex - px) == 0 and min(px, tx) <= ex <= max(px, tx) and min(py, ty) <= ey <= max(py, ty)):
+            move_sequence.insert(0, f"move {tx} {ty}")
+            #move_sequence.insert(0, "rest")
+            #temp = move_sequence.pop(0)
+            print("rest", flush=True)
+            continue
+
+    if(temp.startswith('attack')):
+        attack_parts = temp.split(" ")
+        x = int(attack_parts[1])
+        y = int(attack_parts[2])
+
+        if is_enemy_nearby(x, y, enemy.position):
+            move_sequence = myPlayer.GetMiningSequence(gameState, 'M')
+            print("rest", flush = True)
+
+    parts = temp.split() 
+
+    if len(parts) >= 3: 
+        command = parts[0]
+        if(command == "mine"):
+            x = int(parts[1])  
+            y = int(parts[2])  
+
+            ore = gameState.board[x][y]
+            prts = ore.split('_')
+            remaining = int(prts[1])
+            if remaining == 0: #invalid komanda za mine
+                move_sequence.clear()
+                move_sequence = player.GetMiningSequence(gameState, "M")
+                temp = move_sequence.pop(0)     
+
     print(temp, flush=True)
