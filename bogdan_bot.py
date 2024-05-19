@@ -16,7 +16,7 @@ class GameState:
 class Player:
     def __init__(self, data):
         self.name = str(data['name'])
-        self.energy = str(data['energy'])
+        self.energy = int(data['energy'])
         self.xp = str(data['xp'])
         self.coins = str(data['coins'])
         self.position = [int(pos) for pos in data['position']]
@@ -153,16 +153,16 @@ class Player:
         total_minerals = self.raw_minerals
         total_diamonds = self.raw_diamonds 
 
-        if total_minerals > 1:
-            m_energy =  1
-            m_xp = total_minerals - 1  
+        if total_minerals > 2:
+            m_energy =  2
+            m_xp = total_minerals - 2  
         else:
             m_energy = 0 
             m_xp = total_minerals 
 
-        if total_diamonds > 1:
-            d_coins = 1 
-            d_xp = total_diamonds - 1  
+        if total_diamonds > 2:
+            d_coins = 2 
+            d_xp = total_diamonds - 2 
         else:
             d_coins = 0  
             d_xp = total_diamonds  
@@ -199,12 +199,12 @@ class Player:
         move_coordinates = self.find_accessible_neighbor(gameState.board, target_coordinates, player_coordinates)
         actions = self.get_move_sequence(gameState, player_coordinates,  move_coordinates)
 
-
         player_coordinates = move_coordinates
         player_capacity = int(gameState.player1.backpack_capacity)  
         ore_capacity = self.GetOreCapacity(gameState.board, target_coordinates)
         ore_value = self.GetOreValue(gameState.board, target_coordinates)
 
+    
         while player_capacity <= 8 and ore_capacity > 0:
             if player_capacity + ore_value > 8:
                 break
@@ -212,20 +212,18 @@ class Player:
             actions.append(f"mine {target_coordinates[0]} {target_coordinates[1]}")
             player_capacity += ore_value
             ore_capacity -= 1 
-            self.raw_minerals += 2
+            self.raw_minerals += 1
 
         home_coordinates = self.GetHomePosition(gameState)
-        actions.extend(self.GoHomeActions(gameState, player_coordinates, home_coordinates))
 
+        actions.extend(self.GoHomeActions(gameState, player_coordinates, home_coordinates))
         actions.append(self.ConversionsSplit())
+        self.raw_minerals = 0
         return actions
     
     def get_move_sequence(self, gameState,  from_coordinates, target_coordinates):
         search = BreadthFirstSearch(gameState)
-        if gameState.firstPlayerTurn:
-            initial_state = RobotState(gameState, None, from_coordinates, target_coordinates)
-        else:
-            initial_state = RobotState(gameState, None, from_coordinates, target_coordinates)
+        initial_state = RobotState(gameState, None, from_coordinates, target_coordinates)
 
         path, _, _ = search.search(lambda: initial_state)
 
@@ -382,7 +380,7 @@ class RobotState(State):
         x = int(self.position[0])
         y = int(self.position[1])
 
-        available_fileds = ["A", "B", "E"]
+        available_fileds = ["A", "B", "E", self.player_code]
         if y < 9:
             for i in range(y + 1, 10):
                 if self.board[x][i] not in available_fileds:
@@ -417,7 +415,7 @@ class RobotState(State):
         return self.position == self.goal_position
 
     def unique_hash(self):
-        return f"{self.position}{self.player.energy}"
+        return f"{self.position}{self.player.energy}{self.player.raw_minerals}"
 
     def manhattan_distance(self, pointA, pointB):
         return abs(pointA[0] - pointB[0]) + abs(pointA[1] - pointB[1])
