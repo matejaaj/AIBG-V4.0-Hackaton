@@ -153,22 +153,39 @@ class Player:
         total_minerals = self.raw_minerals
         total_diamonds = self.raw_diamonds 
 
-        if total_minerals > 2:
-            m_energy =  2
-            m_xp = total_minerals - 2  
-        else:
-            m_energy = 0 
-            m_xp = total_minerals 
+        if self.energy <= 500:
+            if total_minerals > 2:
+                m_energy =  max(2, total_minerals - 2)
+                m_xp = total_minerals - m_energy 
+            else:
+                m_energy = 0 
+                m_xp = total_minerals 
 
-        if total_diamonds > 2:
-            d_coins = 2 
-            d_xp = total_diamonds - 2 
-        else:
-            d_coins = 0  
-            d_xp = total_diamonds  
+            if total_diamonds > 5:
+                d_xp = max(total_diamonds, 5) 
+                d_coins = total_diamonds - d_xp 
+            else:
+                d_coins = 0  
+                d_xp = total_diamonds  
 
-        m_coins = 0
-        d_energy = 0
+            m_coins = 0
+            d_energy = 0
+        else:
+            if total_minerals > 2:
+                m_xp =  max(2, total_minerals - 2)
+                m_energy = total_minerals - m_xp
+            else:
+                m_energy = 0 
+                m_xp = total_minerals 
+            if total_diamonds > 5:
+                d_xp = max(total_diamonds, 5) 
+                d_coins = total_diamonds - d_xp 
+            else:
+                d_coins = 0  
+                d_xp = total_diamonds    
+
+            m_coins = 0
+            d_energy = 0
 
         return self.ConversionsAction(d_coins, m_coins, d_energy, m_energy, d_xp, m_xp)
 
@@ -204,7 +221,6 @@ class Player:
         ore_capacity = self.GetOreCapacity(gameState.board, target_coordinates)
         ore_value = self.GetOreValue(gameState.board, target_coordinates)
 
-    
         while player_capacity <= 8 and ore_capacity > 0:
             if player_capacity + ore_value > 8:
                 break
@@ -212,6 +228,7 @@ class Player:
             actions.append(f"mine {target_coordinates[0]} {target_coordinates[1]}")
             player_capacity += ore_value
             ore_capacity -= 1 
+            
             self.raw_minerals += 1
 
         home_coordinates = self.GetHomePosition(gameState)
@@ -436,18 +453,13 @@ def ValidateDaze(gameState):
 
 move_sequence = []
 
+cnt = 0
+
 while True:
     line = sys.stdin.readline().strip()
     json_data = json.loads(line)
 
     gameState = GameState(json_data)
-
-
-    #if dazed
-    #new sequnce
-    if not move_sequence:
-        move_sequence = gameState.player1.GetMiningSequence(gameState, 'M')
-
 
     if gameState.player2.name == "Topic Team":
         position = gameState.player2.position
@@ -456,6 +468,16 @@ while True:
             if gameState.player2.daze_turns <= 1:
                 if(ValidateDaze(gameState)):
                     move_sequence.insert(0, "shop daze")
+
+    if not move_sequence and cnt == 0:
+        move_sequence = gameState.player1.GetMiningSequence(gameState, 'M')
+        cnt += 1
+    if not move_sequence and cnt == 1:
+        move_sequence = gameState.player1.GetMiningSequence(gameState, 'D')
+        cnt += 1
+    if not move_sequence and cnt > 1:
+        move_sequence = gameState.player1.GetMiningSequence(gameState, 'M')
+        cnt += 1
 
     temp = move_sequence.pop(0)
     print(temp, flush=True)
