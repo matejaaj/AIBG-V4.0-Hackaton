@@ -217,7 +217,9 @@ class Player:
         return [9,0] if gameState.firstPlayerTurn else [0,9]
 
     def GoHomeActions(self, gameState, player_coordinates, home_coordinates):
+
         actions = self.get_move_sequence(gameState, player_coordinates, home_coordinates)
+        if actions is None: return ["shop daze"]
         return actions
 
     def GetPlayerCordinates(self, gameState):
